@@ -728,14 +728,40 @@ form.addEventListener('submit', async e => {
 
   const btn = document.getElementById('submitBtn');
   btn.disabled = true; btn.textContent = '제출 중...';
-  try {
-    const body = new URLSearchParams();
-    for (const key in ENTRY) body.append(ENTRY[key], data[key] ?? '');
-    await fetch(FORM_URL, {
-      method:'POST', mode:'no-cors',
-      headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
-      body
+
+  /* 숨은 iframe으로 구글 폼에 진짜 폼 제출 (가장 안정적인 방식) */
+  function postToGoogleForm(d) {
+    return new Promise(resolve => {
+      const iframe = document.createElement('iframe');
+      iframe.name = 'gform_target_' + Date.now();
+      iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+
+      const gf = document.createElement('form');
+      gf.action = FORM_URL;
+      gf.method = 'POST';
+      gf.target = iframe.name;
+      gf.style.display = 'none';
+      const add = (n, v) => {
+        const i = document.createElement('input');
+        i.type = 'hidden'; i.name = n; i.value = v;
+        gf.appendChild(i);
+      };
+      for (const key in ENTRY) add(ENTRY[key], d[key] ?? '');
+      add('fvv', '1');
+      add('pageHistory', '0');
+      document.body.appendChild(gf);
+
+      let settled = false;
+      const finish = () => { if (!settled) { settled = true; resolve(true); } };
+      iframe.addEventListener('load', finish, { once: true });
+      setTimeout(finish, 3000); // 응답 확인이 늦어도 진행
+      gf.submit();
     });
+  }
+
+  try {
+    await postToGoogleForm(data);
     form.style.display = 'none';
     introCard.style.display = 'none';
     document.getElementById('doneView').style.display = 'block';
